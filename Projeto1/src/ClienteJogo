@@ -1,0 +1,95 @@
+import java.io.*;
+import java.net.*;
+import java.util.Scanner;
+
+public class ClienteJogo {
+    private static final String SERVER_IP = "localhost";
+    private static final int SERVER_PORT = 12345;
+
+    public static void main(String[] args) {
+        try (Socket socket = new Socket(SERVER_IP, SERVER_PORT);
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+             Scanner scanner = new Scanner(System.in)) {
+
+            // --- Fase de Login ---
+            boolean loggedIn = false;
+            while (!loggedIn) {
+                System.out.print("Username: ");
+                String user = scanner.nextLine();
+                out.println(user); // Envia username [cite: 47]
+
+                System.out.print("Password: ");
+                String pass = scanner.nextLine();
+                out.println(pass); // Envia password [cite: 48]
+
+                String response = in.readLine();
+                if (response == null) return;
+
+                if (response.equals("LOGIN_SUCCESS")) {
+                    System.out.println("Login efetuado com sucesso"); // [cite: 121]
+                    loggedIn = true;
+                } else if (response.startsWith("LOGIN_WRONG")) {
+                    String[] parts = response.split(":");
+                    System.out.println("Nome de utilizador ou palavra passe errada."); // [cite: 117]
+                    if (parts.length > 1) {
+                        System.out.println("Tentativas restantes: " + parts[1]); // [cite: 118]
+                    }
+                } else if (response.equals("LOGIN_MAX_ATTEMPTS")) {
+                    System.out.println("Nome de utilizador ou palavra passe errada e já esgotou as tentativas."); // [cite: 56]
+                    return;
+                } else {
+                    System.out.println("Erro inesperado ou tempo de login expirou.");
+                    return;
+                }
+            }
+
+            // --- Fase de Espera ---
+            String serverMsg = in.readLine();
+            if ("WAIT_START".equals(serverMsg)) {
+                System.out.println("Por favor, aguarde até terminar o tempo para a entrada de novos jogadores"); // [cite: 122]
+                serverMsg = in.readLine(); // Bloqueia aqui à espera do GAME_START
+            }
+
+            // --- Fase de Jogo ---
+            if (serverMsg != null && serverMsg.startsWith("GAME_START")) {
+                String[] parts = serverMsg.split(":");
+                System.out.println("O número a adivinhar está entre " + parts[1] + " e " + parts[2] + ". Ganha o primeiro utilizador a adivinhar o número"); // [cite: 123]
+                System.out.println("Em qualquer momento, pode introduzir \"Desisto\" para sair do jogo"); // [cite: 124]
+
+                while (true) {
+                    System.out.println("Por favor introduza o seu palpite:"); // [cite: 125]
+                    String input = scanner.nextLine();
+                    out.println(input); // Envia palpite ou "Desisto" [cite: 49, 50]
+
+                    if (input.equalsIgnoreCase("Desisto")) {
+                        break;
+                    }
+
+                    // Ler resposta do palpite
+                    String gameResp = in.readLine();
+                    if (gameResp == null) break;
+
+                    if (gameResp.equals("HINT_HIGHER")) {
+                        System.out.println("O número " + input + " é inferior ao número a adivinhar"); // [cite: 130] (Nota: lógica inversa - se palpite < segredo, server diz HIGHER, output diz "é inferior")
+                    } else if (gameResp.equals("HINT_LOWER")) {
+                        System.out.println("O número " + input + " é superior ao número a adivinhar"); // [cite: 127]
+                    } else if (gameResp.equals("WIN")) {
+                        System.out.println("Parabéns, acertou no número"); // [cite: 141]
+                        break;
+                    } else if (gameResp.startsWith("GAME_OVER_WINNER")) {
+                        String[] resParts = gameResp.split(":");
+                        System.out.println("O jogador " + resParts[1] + " já acertou no número (" + resParts[2] + ")"); // [cite: 158]
+                        break;
+                    } else if (gameResp.equals("GAME_OVER_TIMEOUT")) {
+                        System.out.println("Terminou o tempo de jogo e ninguém acertou."); // [cite: 58]
+                        break;
+                    }
+                }
+            }
+
+        } catch (IOException e) {
+            System.out.println("Conexão encerrada pelo servidor.");
+        }
+    }
+}
